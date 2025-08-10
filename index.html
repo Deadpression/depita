@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard - Gastos Hogar</title>
+
+  <!-- CDN libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/tabletop@1.6.0/tabletop.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/micromodal/dist/micromodal.min.js"></script>
+
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--muted:#94a3b8;--accent:#7c3aed;--glass:rgba(255,255,255,0.03)}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,#071129 0%, #071229 60%);color:#e6eef8;padding:18px}
+    .container{max-width:1200px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+    .metric{padding:12px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);}
+    .metric h3{margin:0;font-size:12px;color:var(--muted)}
+    .metric p{margin:6px 0 0;font-size:18px;font-weight:700}
+    .main{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+    canvas{background:transparent;border-radius:8px}
+    .section{margin-bottom:12px}
+    .tabs{display:flex;gap:6px}
+    .tab{padding:8px 12px;border-radius:8px;cursor:pointer;background:var(--glass)}
+    .tab.active{background:linear-gradient(90deg,var(--accent),#5b21b6);box-shadow:0 6px 20px rgba(124,58,237,0.16)}
+    .list{max-height:260px;overflow:auto;margin-top:8px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:6px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.03);font-size:13px}
+    .muted{color:var(--muted)}
+    .small{font-size:13px}
+    .btn{background:var(--accent);color:white;padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+    .secondary{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+    .input{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+
+    /* modal overrides */
+    .modal__container{background:var(--card);color:inherit;border-radius:12px;padding:18px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Dashboard de Gastos — Hogar</h1>
+        <div class="muted small">Dinámico | Fuente: Google Sheets (publícalo como CSV)</div>
+      </div>
+      <div class="controls">
+        <!-- URL input is now readonly because we fixed URL in code -->
+        <input id="csvUrlInput" class="input" style="width:420px" readonly />
+        <button id="reloadBtn" class="btn">Reload data</button>
+        <button id="downloadBtn" class="secondary btn">Export CSV</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card metric" id="incomeMetric" data-role="metric">
+        <h3>Ingresos totales</h3>
+        <p id="incomeValue">—</p>
+        <div class="muted small">Suma de sueldos y otras entradas</div>
+      </div>
+
+      <div class="card metric" id="expensesMetric">
+        <h3>Gastos totales</h3>
+        <p id="expensesValue">—</p>
+        <div class="muted small">Suma de gastos del mes</div>
+      </div>
+
+      <div class="card metric" id="debtMetric">
+        <h3>Deudas</h3>
+        <p id="debtValue">—</p>
+        <div class="muted small">Total de saldos pendientes</div>
+      </div>
+
+      <div class="card metric" id="netMetric">
+        <h3>Saldo neto</h3>
+        <p id="netValue">—</p>
+        <div class="muted small">Ingresos - Gastos</div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div>
+        <div class="card section">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>Visión general</strong>
+            <div class="tabs">
+              <div class="tab active" data-filter="all">Combinado</div>
+              <div class="tab" data-filter="casa">Casa</div>
+              <div class="tab" data-filter="yo">Tú</div>
+              <div class="tab" data-filter="pareja">Pareja</div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px">
+            <canvas id="balanceChart" height="120"></canvas>
+          </div>
+        </div>
+
+        <div class="card section">
+          <strong>Desglose por categoría</strong>
+          <div style="margin-top:12px"><canvas id="categoryChart" height="110"></canvas></div>
+        </div>
+
+        <div class="card section">
+          <strong>Historial de transacciones</strong>
+          <div class="list" id="transactionsList"></div>
+        </div>
+
+      </div>
+
+      <aside>
+        <div class="card section">
+          <strong>Detalles rápidos</strong>
+          <table style="margin-top:8px">
+            <tbody>
+              <tr><th class="muted">Casa</th><td id="sumCasa">—</td></tr>
+              <tr><th class="muted">Tú</th><td id="sumYo">—</td></tr>
+              <tr><th class="muted">Pareja</th><td id="sumPareja">—</td></tr>
+              <tr><th class="muted">Ahorro objetivo</th><td id="savingsGoal">—</td></tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top:12px">
+            <button class="btn" id="openDetails">Ver detalles (hover)</button>
+          </div>
+        </div>
+
+        <div class="card section">
+          <strong>Filtros</strong>
+          <div style="margin-top:8px">
+            <label class="small muted">Año / Mes</label>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <input id="filterYear" class="input small" placeholder="2025" />
+              <input id="filterMonth" class="input small" placeholder="MM (01-12)" />
+            </div>
+            <div style="margin-top:8px">
+              <button id="applyFilter" class="secondary btn">Aplicar</button>
+            </div>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+
+    <!-- Modal for details -->
+    <div id="modal-1" aria-hidden="true">
+      <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+        <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="modal-1-title">
+          <header>
+            <h2 id="modal-1-title">Detalle de transacciones</h2>
+            <button aria-label="Close modal" data-micromodal-close style="float:right">X</button>
+          </header>
+          <main id="modal-1-content" style="margin-top:10px;max-height:60vh;overflow:auto">
+            <!-- details go here -->
+          </main>
+          <footer style="margin-top:12px"><button data-micromodal-close class="btn">Cerrar</button></footer>
+        </div>
+      </div>
+    </div>
+
+    <footer style="margin-top:18px;color:var(--muted);font-size:13px">Plantilla generada — modifica libremente. Pregúntame si quieres integrarlo a Google Drive o desplegarlo.</footer>
+  </div>
+
+<script>
+// ========== CONFIG ==========
+const SHEET_PUB_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTCfRucXSjGlbRHoO-MNKjRpei_6qGL-hQ4B7Xbxq7FEFkLrDDVsKAEFc53VCj-xxdcPJ8l08h47MY9/pubhtml';
+// ============================
+
+// UI references
+const reloadBtn = document.getElementById('reloadBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const openDetails = document.getElementById('openDetails');
+const modalContent = document.getElementById('modal-1-content');
+
+// metric DOMs
+const incomeValue = document.getElementById('incomeValue');
+const expensesValue = document.getElementById('expensesValue');
+const debtValue = document.getElementById('debtValue');
+const netValue = document.getElementById('netValue');
+const sumCasa = document.getElementById('sumCasa');
+const sumYo = document.getElementById('sumYo');
+const sumPareja = document.getElementById('sumPareja');
+const savingsGoal = document.getElementById('savingsGoal');
+
+// filters
+const filterYear = document.getElementById('filterYear');
+const filterMonth = document.getElementById('filterMonth');
+const applyFilter = document.getElementById('applyFilter');
+
+// charts
+let balanceChart = null, categoryChart = null;
+
+// state
+let rawRows = [];
+let transactions = [];
+let currentFilter = {year: null, month: null, section: 'all'};
+
+function formatCurrency(n){
+  if (isNaN(n)) return '—';
+  return n.toLocaleString('es-CL', {style:'currency', currency:'CLP', maximumFractionDigits:0});
+}
+
+function normalizeRow(row){
+  // Map your sheet columns (adjust if necessary)
+  const Fecha = row['Fecha'] || row['fecha'] || '';
+  const Categoria = row['Categoria'] || row['categoría'] || row['categoria'] || '';
+  const MontoRaw = row['Monto'] || row['monto'] || '0';
+  const Tipo = row['Tipo'] || row['tipo'] || '';
+  const Quien = row['Quien'] || row['quien'] || '';
+  const Descripcion = row['Descripcion'] || row['Descripción'] || row['descripcion'] || row['Desc'] || '';
+
+  // Parse amount
+  const cleaned = String(MontoRaw).replace(/[^0-9\-.,]/g, '').replace(/\./g, '').replace(/,/g, '.') || '0';
+  const amount = parseFloat(cleaned) || 0;
+
+  // Parse date
+  let dateObj = null;
+  if (Fecha){
+    const parsed = new Date(Fecha);
+    if (!isNaN(parsed)) dateObj = parsed;
+  }
+
+  return {Fecha: dateObj, Categoria, Monto: amount, Tipo, Quien, Descripcion, raw: row};
+}
+
+function computeSummaries(filtered){
+  let income = 0, expenses = 0, debt = 0, casa = 0, yo = 0, pareja = 0;
+  filtered.forEach(r =>{
+    const t = (r.Tipo||'').toLowerCase();
+    const q = (r.Quien||'').toLowerCase();
+    if(t.includes('ingreso') || t.includes('ingres')) income += r.Monto;
+    else if(t.includes('deuda') || t.includes('debt')) debt += r.Monto;
+    else expenses += r.Monto;
+
+    if(q.includes('casa')) casa += r.Monto;
+    else if(q.includes('yo') || q.includes('tu') || q.includes('tú')) yo += r.Monto;
+    else if(q.includes('pareja') || q.includes('novia') || q.includes('girlfriend')) pareja += r.Monto;
+  });
+  return {income, expenses, debt, casa, yo, pareja};
+}
+
+function filterTransactions(){
+  let out = transactions.slice();
+  if(currentFilter.year){
+    out = out.filter(r => r.Fecha && r.Fecha.getFullYear() == currentFilter.year);
+  }
+  if(currentFilter.month){
+    out = out.filter(r => r.Fecha && (r.Fecha.getMonth()+1) == currentFilter.month);
+  }
+  if(currentFilter.section && currentFilter.section !== 'all'){
+    out = out.filter(r => (r.Quien || '').toLowerCase().includes(currentFilter.section));
+  }
+  return out;
+}
+
+function groupByMonth(filtered){
+  const map = new Map();
+  filtered.forEach(r =>{
+    const d = r.Fecha || new Date();
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if(!map.has(key)) map.set(key, {income:0, expenses:0, debt:0});
+    const bucket = map.get(key);
+    const t = (r.Tipo||'').toLowerCase();
+    if(t.includes('ingreso')) bucket.income += r.Monto;
+    else if(t.includes('deuda')) bucket.debt += r.Monto;
+    else bucket.expenses += r.Monto;
+  });
+  // sort keys
+  const entries = Array.from(map.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
+  return entries.map(([k,v])=>({month:k, ...v}));
+}
+
+function groupByCategory(filtered){
+  const map = new Map();
+  filtered.forEach(r=>{
+    const c = r.Categoria || 'Sin categoría';
+    if(!map.has(c)) map.set(c,0);
+    map.set(c, map.get(c)+Math.abs(r.Monto));
+  });
+  return Array.from(map.entries()).sort((a,b)=>b[1]-a[1]);
+}
+
+function renderMetrics(summaries){
+  incomeValue.textContent = formatCurrency(summaries.income);
+  expensesValue.textContent = formatCurrency(summaries.expenses);
+  debtValue.textContent = formatCurrency(summaries.debt);
+  netValue.textContent = formatCurrency(summaries.income - summaries.expenses - summaries.debt);
+  sumCasa.textContent = formatCurrency(summaries.casa);
+  sumYo.textContent = formatCurrency(summaries.yo);
+  sumPareja.textContent = formatCurrency(summaries.pareja);
+  savingsGoal.textContent = formatCurrency(Math.max(0, summaries.income - summaries.expenses));
+}
+
+function renderTransactionsList(filtered){
+  const container = document.getElementById('transactionsList');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr><th>Fecha</th><th>Descripción</th><th>Cat</th><th>Quien</th><th>Monto</th></tr>';
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  filtered.slice().reverse().forEach(r=>{
+    const tr = document.createElement('tr');
+    const f = r.Fecha? r.Fecha.toLocaleDateString('es-CL') : '-';
+    tr.innerHTML = `<td class="small">${f}</td><td class="small">${(r.Descripcion||'').slice(0,60)}</td><td class="small muted">${r.Categoria||''}</td><td class="small muted">${r.Quien||''}</td><td class="small">${formatCurrency(r.Monto)}</td>`;
+    tr.title = `Click para ver detalle: ${r.Descripcion||''}`;
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', ()=> showTransactionDetails(r));
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function showTransactionDetails(r){
+  modalContent.innerHTML = `<table><tr><th>Fecha</th><td>${r.Fecha? r.Fecha.toLocaleDateString('es-CL') : '-'}</td></tr>
+  <tr><th>Descripción</th><td>${r.Descripcion||''}</td></tr>
+  <tr><th>Categoría</th><td>${r.Categoria||''}</td></tr>
+  <tr><th>Quien</th><td>${r.Quien||''}</td></tr>
+  <tr><th>Tipo</th><td>${r.Tipo||''}</td></tr>
+  <tr><th>Monto</th><td>${formatCurrency(r.Monto)}</td></tr></table>`;
+  MicroModal.show('modal-1');
+}
+
+function renderCharts(monthly, categories){
+  // balanceChart: line for net (income - expenses)
+  const labels = monthly.map(m=>m.month);
+  const net = monthly.map(m=> (m.income - m.expenses - m.debt));
+  const income = monthly.map(m=>m.income);
+  const expenses = monthly.map(m=>m.expenses);
+
+  const balCtx = document.getElementById('balanceChart').getContext('2d');
+  if(balanceChart) balanceChart.destroy();
+  balanceChart = new Chart(balCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets:[
+        {
+          label:'Ingresos',
+          data: income,
+          borderColor:'#2dd4bf',
+          backgroundColor:'rgba(45,212,191,0.2)',
+          fill:true,
+          tension:0.3
+        },
+        {
+          label:'Gastos',
+          data: expenses,
+          borderColor:'#ef4444',
+          backgroundColor:'rgba(239,68,68,0.2)',
+          fill:true,
+          tension:0.3
+        },
+        {
+          label:'Saldo neto',
+          data: net,
+          borderColor:'#a78bfa',
+          fill:false,
+          tension:0.3
+        }
+      ]
+    },
+    options:{
+      responsive:true,
+      scales:{
+        y:{
+          beginAtZero:true,
+          ticks:{
+            callback: val => val ? '$' + val.toLocaleString() : val
+          }
+        }
+      },
+      plugins:{
+        legend:{position:'top'}
+      }
+    }
+  });
+
+  // categoryChart: horizontal bar chart of categories
+  const catLabels = categories.map(c=>c[0]);
+  const catData = categories.map(c=>c[1]);
+
+  const catCtx = document.getElementById('categoryChart').getContext('2d');
+  if(categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(catCtx, {
+    type:'bar',
+    data:{
+      labels: catLabels,
+      datasets:[{
+        label:'Monto',
+        data: catData,
+        backgroundColor:'#7c3aed'
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      responsive:true,
+      scales:{
+        x:{
+          beginAtZero:true,
+          ticks:{
+            callback: val => val ? '$' + val.toLocaleString() : val
+          }
+        }
+      },
+      plugins:{
+        legend:{display:false}
+      }
+    }
+  });
+}
+
+function renderAll(){
+  const filtered = filterTransactions();
+  const summaries = computeSummaries(filtered);
+  renderMetrics(summaries);
+  renderTransactionsList(filtered);
+  const monthly = groupByMonth(filtered);
+  const categories = groupByCategory(filtered);
+  renderCharts(monthly, categories);
+}
+
+function fetchAndLoadTabletop(url = SHEET_PUB_URL) {
+  reloadBtn.disabled = true;
+  reloadBtn.textContent = 'Cargando...';
+  Tabletop.init({
+    key: url,
+    simpleSheet: true,
+    callback: function(data) {
+      reloadBtn.disabled = false;
+      reloadBtn.textContent = 'Reload data';
+      rawRows = data;
+      transactions = data.map(normalizeRow);
+      renderAll();
+    },
+    error: function(error) {
+      reloadBtn.disabled = false;
+      reloadBtn.textContent = 'Reload data';
+      alert('Error cargando datos con Tabletop.js: ' + error);
+      console.error(error);
+    }
+  });
+}
+
+reloadBtn.onclick = () => fetchAndLoadTabletop();
+applyFilter.onclick = () => {
+  const y = parseInt(filterYear.value);
+  const m = parseInt(filterMonth.value);
+  currentFilter.year = isNaN(y)?null:y;
+  currentFilter.month = isNaN(m)?null:m;
+  renderAll();
+};
+
+openDetails.onclick = () => {
+  const filtered = filterTransactions();
+  modalContent.innerHTML = '';
+  filtered.forEach(r => {
+    const div = document.createElement('div');
+    div.style.padding = '4px 0';
+    div.textContent = `${r.Fecha? r.Fecha.toLocaleDateString('es-CL') : '-'} | ${r.Descripcion || ''} | ${r.Categoria || ''} | ${r.Quien || ''} | ${formatCurrency(r.Monto)}`;
+    modalContent.appendChild(div);
+  });
+  MicroModal.show('modal-1');
+};
+
+// Init
+document.getElementById('csvUrlInput').value = SHEET_PUB_URL;
+fetchAndLoadTabletop();
+
+</script>
+</body>
+</html>
