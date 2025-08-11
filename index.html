@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard - Gastos Hogar</title>
 
-  <!-- CDN libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/tabletop@1.6.0/tabletop.min.js"></script>
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/micromodal/dist/micromodal.min.js"></script>
 
   <style>
+    /* same styles as before (kept concise here) */
     :root{--bg:#0f172a;--card:#0b1220;--muted:#94a3b8;--accent:#7c3aed;--glass:rgba(255,255,255,0.03)}
     html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
     body{background:linear-gradient(180deg,#071129 0%, #071229 60%);color:#e6eef8;padding:18px}
@@ -37,8 +38,6 @@
     .btn{background:var(--accent);color:white;padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
     .secondary{background:transparent;border:1px solid rgba(255,255,255,0.06)}
     .input{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
-
-    /* modal overrides */
     .modal__container{background:var(--card);color:inherit;border-radius:12px;padding:18px}
   </style>
 </head>
@@ -47,40 +46,20 @@
     <header>
       <div>
         <h1>Dashboard de Gastos — Hogar</h1>
-        <div class="muted small">Dinámico | Fuente: Google Sheets (publícalo como CSV)</div>
+        <div class="muted small">Dinámico | Fuente: Google Sheets (publicado como CSV)</div>
       </div>
       <div class="controls">
-        <!-- URL input is now readonly because we fixed URL in code -->
-        <input id="csvUrlInput" class="input" style="width:420px" readonly />
+        <input id="csvUrlInput" class="input" style="width:420px" />
         <button id="reloadBtn" class="btn">Reload data</button>
         <button id="downloadBtn" class="secondary btn">Export CSV</button>
       </div>
     </header>
 
     <div class="grid">
-      <div class="card metric" id="incomeMetric" data-role="metric">
-        <h3>Ingresos totales</h3>
-        <p id="incomeValue">—</p>
-        <div class="muted small">Suma de sueldos y otras entradas</div>
-      </div>
-
-      <div class="card metric" id="expensesMetric">
-        <h3>Gastos totales</h3>
-        <p id="expensesValue">—</p>
-        <div class="muted small">Suma de gastos del mes</div>
-      </div>
-
-      <div class="card metric" id="debtMetric">
-        <h3>Deudas</h3>
-        <p id="debtValue">—</p>
-        <div class="muted small">Total de saldos pendientes</div>
-      </div>
-
-      <div class="card metric" id="netMetric">
-        <h3>Saldo neto</h3>
-        <p id="netValue">—</p>
-        <div class="muted small">Ingresos - Gastos</div>
-      </div>
+      <div class="card metric"><h3>Ingresos totales</h3><p id="incomeValue">—</p><div class="muted small">Suma de sueldos y otras entradas</div></div>
+      <div class="card metric"><h3>Gastos totales</h3><p id="expensesValue">—</p><div class="muted small">Suma de gastos del mes</div></div>
+      <div class="card metric"><h3>Deudas</h3><p id="debtValue">—</p><div class="muted small">Total de saldos pendientes</div></div>
+      <div class="card metric"><h3>Saldo neto</h3><p id="netValue">—</p><div class="muted small">Ingresos - Gastos</div></div>
     </div>
 
     <div class="main">
@@ -95,10 +74,7 @@
               <div class="tab" data-filter="pareja">Pareja</div>
             </div>
           </div>
-
-          <div style="margin-top:12px">
-            <canvas id="balanceChart" height="120"></canvas>
-          </div>
+          <div style="margin-top:12px"><canvas id="balanceChart" height="120"></canvas></div>
         </div>
 
         <div class="card section">
@@ -110,7 +86,6 @@
           <strong>Historial de transacciones</strong>
           <div class="list" id="transactionsList"></div>
         </div>
-
       </div>
 
       <aside>
@@ -121,13 +96,12 @@
               <tr><th class="muted">Casa</th><td id="sumCasa">—</td></tr>
               <tr><th class="muted">Tú</th><td id="sumYo">—</td></tr>
               <tr><th class="muted">Pareja</th><td id="sumPareja">—</td></tr>
+              <tr><th class="muted">Total (Casa)</th><td id="houseTotal">—</td></tr>
+              <tr><th class="muted">Restante (Casa)</th><td id="houseRemaining">—</td></tr>
               <tr><th class="muted">Ahorro objetivo</th><td id="savingsGoal">—</td></tr>
             </tbody>
           </table>
-
-          <div style="margin-top:12px">
-            <button class="btn" id="openDetails">Ver detalles (hover)</button>
-          </div>
+          <div style="margin-top:12px"><button class="btn" id="openDetails">Ver detalles</button></div>
         </div>
 
         <div class="card section">
@@ -138,46 +112,38 @@
               <input id="filterYear" class="input small" placeholder="2025" />
               <input id="filterMonth" class="input small" placeholder="MM (01-12)" />
             </div>
-            <div style="margin-top:8px">
-              <button id="applyFilter" class="secondary btn">Aplicar</button>
-            </div>
+            <div style="margin-top:8px"><button id="applyFilter" class="secondary btn">Aplicar</button></div>
           </div>
         </div>
-
       </aside>
     </div>
 
-    <!-- Modal for details -->
     <div id="modal-1" aria-hidden="true">
       <div class="modal__overlay" tabindex="-1" data-micromodal-close>
         <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="modal-1-title">
-          <header>
-            <h2 id="modal-1-title">Detalle de transacciones</h2>
-            <button aria-label="Close modal" data-micromodal-close style="float:right">X</button>
-          </header>
-          <main id="modal-1-content" style="margin-top:10px;max-height:60vh;overflow:auto">
-            <!-- details go here -->
-          </main>
+          <header><h2 id="modal-1-title">Detalle de transacciones</h2><button aria-label="Close" data-micromodal-close style="float:right">X</button></header>
+          <main id="modal-1-content" style="margin-top:10px;max-height:60vh;overflow:auto"></main>
           <footer style="margin-top:12px"><button data-micromodal-close class="btn">Cerrar</button></footer>
         </div>
       </div>
     </div>
 
-    <footer style="margin-top:18px;color:var(--muted);font-size:13px">Plantilla generada — modifica libremente. Pregúntame si quieres integrarlo a Google Drive o desplegarlo.</footer>
+    <footer style="margin-top:18px;color:var(--muted);font-size:13px">Plantilla generada — dime si quieres ajustes.</footer>
   </div>
 
 <script>
-// ========== CONFIG ==========
-const SHEET_PUB_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTCfRucXSjGlbRHoO-MNKjRpei_6qGL-hQ4B7Xbxq7FEFkLrDDVsKAEFc53VCj-xxdcPJ8l08h47MY9/pub?output=csv';
-// ============================
+// ====== CONFIG ======
+const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTCfRucXSjGlbRHoO-MNKjRpei_6qGL-hQ4B7Xbxq7FEFkLrDDVsKAEFc53VCj-xxdcPJ8l08h47MY9/pub?output=csv';
+let CSV_URL = DEFAULT_CSV;
+// ====================
 
-// UI references
+// UI refs
+const csvUrlInput = document.getElementById('csvUrlInput');
 const reloadBtn = document.getElementById('reloadBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const openDetails = document.getElementById('openDetails');
 const modalContent = document.getElementById('modal-1-content');
 
-// metric DOMs
 const incomeValue = document.getElementById('incomeValue');
 const expensesValue = document.getElementById('expensesValue');
 const debtValue = document.getElementById('debtValue');
@@ -186,81 +152,225 @@ const sumCasa = document.getElementById('sumCasa');
 const sumYo = document.getElementById('sumYo');
 const sumPareja = document.getElementById('sumPareja');
 const savingsGoal = document.getElementById('savingsGoal');
+const houseTotalElem = document.getElementById('houseTotal');
+const houseRemainingElem = document.getElementById('houseRemaining');
 
-// filters
 const filterYear = document.getElementById('filterYear');
 const filterMonth = document.getElementById('filterMonth');
 const applyFilter = document.getElementById('applyFilter');
 
-// charts
 let balanceChart = null, categoryChart = null;
+let rawRows = [];     // raw grid (array of arrays) after parse
+let transactions = []; // unified transaction objects
+let currentFilter = {year:null,month:null,section:'all'};
 
-// state
-let rawRows = [];
-let transactions = [];
-let currentFilter = {year: null, month: null, section: 'all'};
-
-function formatCurrency(n){
-  if (isNaN(n)) return '—';
-  return n.toLocaleString('es-CL', {style:'currency', currency:'CLP', maximumFractionDigits:0});
+// ---------- CSV -> grid parser ----------
+function parseCSVText(csvText){
+  const result = Papa.parse(csvText.trim(), {header:false, skipEmptyLines:false});
+  const grid = result.data.map(row => (row||[]).map(cell => (cell===undefined||cell===null)?'':String(cell).trim()));
+  return grid;
 }
 
-function normalizeRow(row){
-  // Map your sheet columns (adjust if necessary)
-  const Fecha = row['Fecha'] || row['fecha'] || '';
-  const Categoria = row['Categoria'] || row['categoría'] || row['categoria'] || '';
-  const MontoRaw = row['Monto'] || row['monto'] || '0';
-  const Tipo = row['Tipo'] || row['tipo'] || '';
-  const Quien = row['Quien'] || row['quien'] || '';
-  const Descripcion = row['Descripcion'] || row['Descripción'] || row['descripcion'] || row['Desc'] || '';
+// helpers for block detection/parsing
+function rowIsEmpty(row){ if(!row) return true; return row.every(c => (c===null || c===undefined || String(c).trim()==='')); }
+function rowHasTokens(row, tokens){
+  if(!row) return false;
+  const lc = row.map(c => String(c||'').toLowerCase());
+  return tokens.every(tok => lc.some(cell => cell.includes(tok.toLowerCase())));
+}
 
-  // Parse amount
-  const cleaned = String(MontoRaw).replace(/[^0-9\-.,]/g, '').replace(/\./g, '').replace(/,/g, '.') || '0';
-  const amount = parseFloat(cleaned) || 0;
+const BLOCK_DEFS = [
+  {key:'salaries', tokens:['sueldo tolito','sueldo karhysita','sueldo']},
+  {key:'cuentas_depita', tokens:['cuentas depita','cantidadcd','cantidad cd']},
+  {key:'casa_contrib', tokens:['casa tolito','casa karhysita','casa']},
+  {key:'deudas', tokens:['deudas tolito','cantidaddt','deudas karhysita','cantidaddk']},
+  {key:'personal_tolito', tokens:['nombre','fecha','cantidadgt']},
+  {key:'personal_karhysita', tokens:['nombre','fecha','cantidadgk']},
+  {key:'groceries', tokens:['nombre','fecha','cantidadgd']},
+  {key:'balances', tokens:['tolito','karhysita']},
+  {key:'totals', tokens:['total','restante']},
+  {key:'tarjeta_credito', tokens:['tarjeta de credito','tarjeta de crédito']}
+];
 
-  // Parse date
-  let dateObj = null;
-  if (Fecha){
-    const parsed = new Date(Fecha);
-    if (!isNaN(parsed)) dateObj = parsed;
+function parseBlocksFromGrid(grid){
+  const blocks = {};
+  function rowMatchesAnyHeader(row){ for(const def of BLOCK_DEFS) if(rowHasTokens(row, def.tokens)) return true; return false; }
+  for(let i=0;i<grid.length;i++){
+    const row = grid[i];
+    if(rowIsEmpty(row)) continue;
+    for(const def of BLOCK_DEFS){
+      if(rowHasTokens(row, def.tokens)){
+        const header = row;
+        const data = [];
+        let j = i+1;
+        while(j < grid.length && !rowIsEmpty(grid[j]) && !rowMatchesAnyHeader(grid[j])){
+          data.push(grid[j]); j++;
+        }
+        const objs = data.map(r => {
+          const obj = {};
+          for(let k=0;k<header.length;k++){
+            const key = header[k] && header[k].length>0 ? header[k] : ('col'+k);
+            obj[String(key).trim()] = r[k] === undefined ? '' : r[k];
+          }
+          return obj;
+        });
+        blocks[def.key] = objs;
+        i = j-1;
+        break;
+      }
+    }
+  }
+  return blocks;
+}
+
+function parseDateSafe(s){
+  if(!s) return null;
+  const d = new Date(s);
+  if(!isNaN(d)) return d;
+  const m = String(s).match(/(\d{1,2})\D(\d{1,2})\D(\d{2,4})/);
+  if(m){
+    const day = parseInt(m[1],10), month = parseInt(m[2],10)-1, year = parseInt(m[3],10);
+    const d2 = new Date(year, month, day);
+    if(!isNaN(d2)) return d2;
+  }
+  return null;
+}
+function parseNumeric(s){
+  if(s===null || s===undefined) return 0;
+  const cleaned = String(s).replace(/[^0-9\-.,]/g,'').replace(/\./g,'').replace(/,/g,'.');
+  const n = parseFloat(cleaned);
+  return isNaN(n)?0:n;
+}
+function detectKey(obj, candidates){
+  const keys = Object.keys(obj||{});
+  for(const c of candidates){
+    const lowc = c.toLowerCase().replace(/\s+/g,'');
+    for(const k of keys){
+      if(String(k).toLowerCase().replace(/\s+/g,'').includes(lowc)) return k;
+    }
+  }
+  for(const k of keys){
+    const lk = String(k).toLowerCase();
+    for(const c of candidates){ if(lk.includes(c.toLowerCase())) return k; }
+  }
+  return null;
+}
+
+function buildTransactionsFromBlocks(blocks){
+  const out = [];
+  // salaries
+  if(blocks.salaries && blocks.salaries.length>0){
+    const r = blocks.salaries[0];
+    const kT = detectKey(r, ['sueldo tolito','sueldo_tolito','tolito']);
+    const kK = detectKey(r, ['sueldo karhysita','sueldo_karhysita','karhysita']);
+    if(kT) out.push({Fecha:null,Categoria:'Sueldo',Monto:parseNumeric(r[kT]),Tipo:'Ingreso',Quien:'tolito',Descripcion:'Sueldo Tolito',raw:r});
+    if(kK) out.push({Fecha:null,Categoria:'Sueldo',Monto:parseNumeric(r[kK]),Tipo:'Ingreso',Quien:'karhysita',Descripcion:'Sueldo Karhysita',raw:r});
+  }
+  // cuentas depita
+  if(blocks.cuentas_depita){
+    for(const r of blocks.cuentas_depita){
+      const kAmt = detectKey(r,['cantidadcd','cantidad cd','cantidad']);
+      const kName = detectKey(r,['cuentas depita','cuentas','depita','nombre']);
+      const amt = parseNumeric(kAmt? r[kAmt] : 0);
+      out.push({Fecha:null,Categoria:kName? r[kName]:'Cuentas Depita',Monto:amt,Tipo:'Gasto',Quien:'casa',Descripcion:kName? r[kName]:'',raw:r});
+    }
+  }
+  // casa contrib
+  if(blocks.casa_contrib){
+    for(const r of blocks.casa_contrib){
+      const kT = detectKey(r,['casa tolito','casa_tolito','tolito']);
+      const kK = detectKey(r,['casa karhysita','casa_karhysita','karhysita']);
+      if(kT && parseNumeric(r[kT])!==0) out.push({Fecha:null,Categoria:'Casa (aporte)',Monto:parseNumeric(r[kT]),Tipo:'Contribucion',Quien:'tolito',Descripcion:'Casa Tolito',raw:r});
+      if(kK && parseNumeric(r[kK])!==0) out.push({Fecha:null,Categoria:'Casa (aporte)',Monto:parseNumeric(r[kK]),Tipo:'Contribucion',Quien:'karhysita',Descripcion:'Casa Karhysita',raw:r});
+    }
+  }
+  // deudas
+  if(blocks.deudas){
+    for(const r of blocks.deudas){
+      const kDT = detectKey(r,['cantidaddt','cantidad dt','cantidaddt']);
+      const kDK = detectKey(r,['cantidaddk','cantidad dk','cantidaddk']);
+      const name = detectKey(r,['deudas tolito','deudas','nombre'])? r[detectKey(r,['deudas tolito','deudas','nombre'])] : '';
+      if(kDT && parseNumeric(r[kDT])!==0) out.push({Fecha:null,Categoria:'Deuda',Monto:parseNumeric(r[kDT]),Tipo:'Deuda',Quien:'tolito',Descripcion:name,raw:r});
+      if(kDK && parseNumeric(r[kDK])!==0) out.push({Fecha:null,Categoria:'Deuda',Monto:parseNumeric(r[kDK]),Tipo:'Deuda',Quien:'karhysita',Descripcion:name,raw:r});
+    }
+  }
+  // personal tolito (CantidadGT)
+  if(blocks.personal_tolito){
+    for(const r of blocks.personal_tolito){
+      const kName=detectKey(r,['nombre']);
+      const kFecha=detectKey(r,['fecha']);
+      const kAmt=detectKey(r,['cantidadgt','cantidad gt','cantidad']);
+      const d=parseDateSafe(kFecha? r[kFecha]:null);
+      const a=parseNumeric(kAmt? r[kAmt]:0);
+      if(a!==0) out.push({Fecha:d,Categoria:'Personal',Monto:a,Tipo:'Gasto',Quien:'tolito',Descripcion:kName? r[kName]:'',raw:r});
+    }
+  }
+  // personal karhysita (CantidadGK)
+  if(blocks.personal_karhysita){
+    for(const r of blocks.personal_karhysita){
+      const kName=detectKey(r,['nombre']);
+      const kFecha=detectKey(r,['fecha']);
+      const kAmt=detectKey(r,['cantidadgk','cantidad gk','cantidad']);
+      const d=parseDateSafe(kFecha? r[kFecha]:null);
+      const a=parseNumeric(kAmt? r[kAmt]:0);
+      if(a!==0) out.push({Fecha:d,Categoria:'Personal',Monto:a,Tipo:'Gasto',Quien:'karhysita',Descripcion:kName? r[kName]:'',raw:r});
+    }
+  }
+  // groceries (CantidadGD)
+  if(blocks.groceries){
+    for(const r of blocks.groceries){
+      const kName=detectKey(r,['nombre']);
+      const kFecha=detectKey(r,['fecha']);
+      const kAmt=detectKey(r,['cantidadgd','cantidad gd','cantidad']);
+      const d=parseDateSafe(kFecha? r[kFecha]:null);
+      const a=parseNumeric(kAmt? r[kAmt]:0);
+      if(a!==0) out.push({Fecha:d,Categoria:'Casa',Monto:a,Type:'Gasto',Tipo:'Gasto',Quien:'casa',Descripcion:kName? r[kName]:'',raw:r});
+    }
+  }
+  // tarjeta de credito
+  if(blocks.tarjeta_credito){
+    for(const r of blocks.tarjeta_credito){
+      const kName=detectKey(r,['nombre']);
+      const kFecha=detectKey(r,['fecha']);
+      const kAmt=detectKey(r,['monto','cantidad','total','costo']);
+      const d=parseDateSafe(kFecha? r[kFecha]:null);
+      const a=parseNumeric(kAmt? r[kAmt]:0);
+      if(a!==0) out.push({Fecha:d,Categoria:'Tarjeta credito',Monto:a,Tipo:'Gasto',Quien:'karhysita',Descripcion:kName? r[kName]:'',raw:r});
+    }
   }
 
-  return {Fecha: dateObj, Categoria, Monto: amount, Tipo, Quien, Descripcion, raw: row};
+  return out;
+}
+
+// ---------- rendering & metrics (uses `transactions`) ----------
+function formatCurrency(n){ if (isNaN(n)) return '—'; return n.toLocaleString('es-CL', {style:'currency', currency:'CLP', maximumFractionDigits:0}); }
+
+function filterTransactions(){
+  let out = transactions.slice();
+  if(currentFilter.year) out = out.filter(r => r.Fecha && r.Fecha.getFullYear() == currentFilter.year);
+  if(currentFilter.month) out = out.filter(r => r.Fecha && (r.Fecha.getMonth()+1) == currentFilter.month);
+  if(currentFilter.section && currentFilter.section !== 'all') out = out.filter(r => (r.Quien || '').toLowerCase().includes(currentFilter.section));
+  return out;
 }
 
 function computeSummaries(filtered){
-  let income = 0, expenses = 0, debt = 0, casa = 0, yo = 0, pareja = 0;
-  filtered.forEach(r =>{
+  let income=0, expenses=0, debt=0, casa=0, yo=0, pareja=0;
+  filtered.forEach(r=>{
     const t = (r.Tipo||'').toLowerCase();
     const q = (r.Quien||'').toLowerCase();
-    if(t.includes('ingreso') || t.includes('ingres')) income += r.Monto;
-    else if(t.includes('deuda') || t.includes('debt')) debt += r.Monto;
+    if(t.includes('ingreso')) income += r.Monto;
+    else if(t.includes('deuda')) debt += r.Monto;
     else expenses += r.Monto;
-
     if(q.includes('casa')) casa += r.Monto;
-    else if(q.includes('yo') || q.includes('tu') || q.includes('tú')) yo += r.Monto;
-    else if(q.includes('pareja') || q.includes('novia') || q.includes('girlfriend')) pareja += r.Monto;
+    else if(q.includes('tolito') || q.includes('yo') || q.includes('tu') || q.includes('tú')) yo += r.Monto;
+    else if(q.includes('karhysita') || q.includes('pareja') || q.includes('novia')) pareja += r.Monto;
   });
   return {income, expenses, debt, casa, yo, pareja};
 }
 
-function filterTransactions(){
-  let out = transactions.slice();
-  if(currentFilter.year){
-    out = out.filter(r => r.Fecha && r.Fecha.getFullYear() == currentFilter.year);
-  }
-  if(currentFilter.month){
-    out = out.filter(r => r.Fecha && (r.Fecha.getMonth()+1) == currentFilter.month);
-  }
-  if(currentFilter.section && currentFilter.section !== 'all'){
-    out = out.filter(r => (r.Quien || '').toLowerCase().includes(currentFilter.section));
-  }
-  return out;
-}
-
 function groupByMonth(filtered){
   const map = new Map();
-  filtered.forEach(r =>{
+  filtered.forEach(r=>{
     const d = r.Fecha || new Date();
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     if(!map.has(key)) map.set(key, {income:0, expenses:0, debt:0});
@@ -270,7 +380,6 @@ function groupByMonth(filtered){
     else if(t.includes('deuda')) bucket.debt += r.Monto;
     else bucket.expenses += r.Monto;
   });
-  // sort keys
   const entries = Array.from(map.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
   return entries.map(([k,v])=>({month:k, ...v}));
 }
@@ -296,39 +405,67 @@ function renderMetrics(summaries){
   savingsGoal.textContent = formatCurrency(Math.max(0, summaries.income - summaries.expenses));
 }
 
+// updated house totals extractor (works with grid or objects)
+function updateHouseTotals(){
+  function findLabelAmountInGrid(grid, labels){
+    const lowLabels = labels.map(l => l.toLowerCase());
+    for(let i=0;i<grid.length;i++){
+      const row = grid[i];
+      if(!row) continue;
+      if(Array.isArray(row)){
+        for(let c=0;c<row.length;c++){
+          const cell = String(row[c]||'').trim().toLowerCase();
+          if(lowLabels.includes(cell)){
+            // numeric in same row
+            for(let k=0;k<row.length;k++){ const v = parseNumeric(row[k]); if(v) return v; }
+            // fallback next row
+            if(i+1 < grid.length){ for(let k=0;k<grid[i+1].length;k++){ const v=parseNumeric(grid[i+1][k]); if(v) return v; } }
+          }
+        }
+      } else {
+        for(const key in row){
+          const cell = String(row[key]||'').trim().toLowerCase();
+          if(lowLabels.includes(cell)){
+            for(const k in row){ const v=parseNumeric(row[k]); if(v) return v; }
+            const idx = rawRows.indexOf(row);
+            if(idx>=0 && idx+1<rawRows.length){
+              const next = rawRows[idx+1];
+              if(typeof next === 'object'){
+                for(const k in next){ const v=parseNumeric(next[k]); if(v) return v; }
+              }
+            }
+          }
+        }
+      }
+    }
+    return 0;
+  }
+
+  const total = findLabelAmountInGrid(rawRows, ['Total','Total casa','total']);
+  const restante = findLabelAmountInGrid(rawRows, ['Restante','restante','Restante casa']);
+  houseTotalElem.textContent = formatCurrency(total);
+  houseRemainingElem.textContent = formatCurrency(restante);
+}
+
 function renderTransactionsList(filtered){
-  const container = document.getElementById('transactionsList');
-  container.innerHTML = '';
-  const table = document.createElement('table');
-  const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Fecha</th><th>Descripción</th><th>Cat</th><th>Quien</th><th>Monto</th></tr>';
-  table.appendChild(thead);
+  const container = document.getElementById('transactionsList'); container.innerHTML='';
+  const table = document.createElement('table'); table.innerHTML = '<thead><tr><th>Fecha</th><th>Descripción</th><th>Cat</th><th>Quien</th><th>Monto</th></tr></thead>';
   const tbody = document.createElement('tbody');
   filtered.slice().reverse().forEach(r=>{
     const tr = document.createElement('tr');
     const f = r.Fecha? r.Fecha.toLocaleDateString('es-CL') : '-';
     tr.innerHTML = `<td class="small">${f}</td><td class="small">${(r.Descripcion||'').slice(0,60)}</td><td class="small muted">${r.Categoria||''}</td><td class="small muted">${r.Quien||''}</td><td class="small">${formatCurrency(r.Monto)}</td>`;
-    tr.title = `Click para ver detalle: ${r.Descripcion||''}`;
-    tr.style.cursor = 'pointer';
-    tr.addEventListener('click', ()=> showTransactionDetails(r));
+    tr.style.cursor='pointer'; tr.title = r.Descripcion||'';
+    tr.addEventListener('click', ()=> {
+      modalContent.innerHTML = `<div style="padding:10px"><strong>${r.Descripcion||''}</strong><div class="muted">${r.Categoria||''} • ${r.Quien||''}</div><div style="margin-top:8px">${formatCurrency(r.Monto)}</div></div>`;
+      MicroModal.show('modal-1');
+    });
     tbody.appendChild(tr);
   });
-  table.appendChild(tbody);
-  container.appendChild(table);
-}
-
-function showTransactionDetails(r){
-  modalContent.innerHTML = `<table><tr><th>Fecha</th><td>${r.Fecha? r.Fecha.toLocaleDateString('es-CL') : '-'}</td></tr>
-  <tr><th>Descripción</th><td>${r.Descripcion||''}</td></tr>
-  <tr><th>Categoría</th><td>${r.Categoria||''}</td></tr>
-  <tr><th>Quien</th><td>${r.Quien||''}</td></tr>
-  <tr><th>Tipo</th><td>${r.Tipo||''}</td></tr>
-  <tr><th>Monto</th><td>${formatCurrency(r.Monto)}</td></tr></table>`;
-  MicroModal.show('modal-1');
+  table.appendChild(tbody); container.appendChild(table);
 }
 
 function renderCharts(monthly, categories){
-  // balanceChart: line for net (income - expenses)
   const labels = monthly.map(m=>m.month);
   const net = monthly.map(m=> (m.income - m.expenses - m.debt));
   const income = monthly.map(m=>m.income);
@@ -337,143 +474,70 @@ function renderCharts(monthly, categories){
   const balCtx = document.getElementById('balanceChart').getContext('2d');
   if(balanceChart) balanceChart.destroy();
   balanceChart = new Chart(balCtx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets:[
-        {
-          label:'Ingresos',
-          data: income,
-          borderColor:'#2dd4bf',
-          backgroundColor:'rgba(45,212,191,0.2)',
-          fill:true,
-          tension:0.3
-        },
-        {
-          label:'Gastos',
-          data: expenses,
-          borderColor:'#ef4444',
-          backgroundColor:'rgba(239,68,68,0.2)',
-          fill:true,
-          tension:0.3
-        },
-        {
-          label:'Saldo neto',
-          data: net,
-          borderColor:'#a78bfa',
-          fill:false,
-          tension:0.3
-        }
-      ]
-    },
-    options:{
-      responsive:true,
-      scales:{
-        y:{
-          beginAtZero:true,
-          ticks:{
-            callback: val => val ? '$' + val.toLocaleString() : val
-          }
-        }
-      },
-      plugins:{
-        legend:{position:'top'}
-      }
-    }
+    type:'line',
+    data:{ labels, datasets:[
+      {label:'Ingresos', data:income, borderColor:'#2dd4bf', backgroundColor:'rgba(45,212,191,0.16)', fill:true, tension:0.3},
+      {label:'Gastos', data:expenses, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,0.12)', fill:true, tension:0.3},
+      {label:'Saldo neto', data:net, borderColor:'#a78bfa', fill:false, tension:0.3}
+    ]},
+    options:{ responsive:true, plugins:{legend:{position:'top'}}}
   });
 
-  // categoryChart: horizontal bar chart of categories
-  const catLabels = categories.map(c=>c[0]);
-  const catData = categories.map(c=>c[1]);
-
-  const catCtx = document.getElementById('categoryChart').getContext('2d');
-  if(categoryChart) categoryChart.destroy();
-  categoryChart = new Chart(catCtx, {
-    type:'bar',
-    data:{
-      labels: catLabels,
-      datasets:[{
-        label:'Monto',
-        data: catData,
-        backgroundColor:'#7c3aed'
-      }]
-    },
-    options:{
-      indexAxis:'y',
-      responsive:true,
-      scales:{
-        x:{
-          beginAtZero:true,
-          ticks:{
-            callback: val => val ? '$' + val.toLocaleString() : val
-          }
-        }
-      },
-      plugins:{
-        legend:{display:false}
-      }
-    }
-  });
+  const catLabels = categories.map(c=>c[0]), catData = categories.map(c=>c[1]);
+  const catCtx = document.getElementById('categoryChart').getContext('2d'); if(categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(catCtx, { type:'bar', data:{labels:catLabels,datasets:[{label:'Monto',data:catData, backgroundColor:'#7c3aed'}]}, options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}} } });
 }
 
 function renderAll(){
   const filtered = filterTransactions();
   const summaries = computeSummaries(filtered);
   renderMetrics(summaries);
+  updateHouseTotals();
   renderTransactionsList(filtered);
-  const monthly = groupByMonth(filtered);
+  const monthly = groupByMonth(transactions);
   const categories = groupByCategory(filtered);
   renderCharts(monthly, categories);
 }
 
-function fetchAndLoadTabletop(url = SHEET_PUB_URL) {
-  reloadBtn.disabled = true;
-  reloadBtn.textContent = 'Cargando...';
-  Tabletop.init({
-    key: url,
-    simpleSheet: true,
-    callback: function(data) {
-      reloadBtn.disabled = false;
-      reloadBtn.textContent = 'Reload data';
-      rawRows = data;
-      transactions = data.map(normalizeRow);
-      renderAll();
-    },
-    error: function(error) {
-      reloadBtn.disabled = false;
-      reloadBtn.textContent = 'Reload data';
-      alert('Error cargando datos con Tabletop.js: ' + error);
-      console.error(error);
-    }
-  });
+// ---------- fetch CSV and build blocks ----------
+async function fetchAndLoad(url){
+  try{
+    reloadBtn.disabled=true; reloadBtn.textContent='Cargando...';
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('No se pudo obtener CSV: ' + res.status);
+    const text = await res.text();
+    const grid = parseCSVText(text);
+    rawRows = grid;
+    const blocks = parseBlocksFromGrid(grid);
+    window.sheetBlocks = blocks; // debug: open console and inspect
+    transactions = buildTransactionsFromBlocks(blocks);
+    renderAll();
+  }catch(err){
+    alert('Error cargando CSV: ' + err.message + '\\nAsegúrate de usar \"Publicar en web\" o que la URL sea pública'); console.error(err);
+  } finally { reloadBtn.disabled=false; reloadBtn.textContent='Reload data'; }
 }
 
-reloadBtn.onclick = () => fetchAndLoadTabletop();
-applyFilter.onclick = () => {
-  const y = parseInt(filterYear.value);
-  const m = parseInt(filterMonth.value);
-  currentFilter.year = isNaN(y)?null:y;
-  currentFilter.month = isNaN(m)?null:m;
-  renderAll();
-};
+// ---------- UI wiring ----------
+reloadBtn.addEventListener('click', ()=> fetchAndLoad(CSV_URL));
+downloadBtn.addEventListener('click', ()=>{
+  // Offer a naive CSV download of the raw grid (works, it's array of arrays)
+  const csv = Papa.unparse(rawRows || []);
+  const blob = new Blob([csv], {type:'text/csv'}); const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'export_gastos.csv'; a.click();
+});
 
-openDetails.onclick = () => {
-  const filtered = filterTransactions();
-  modalContent.innerHTML = '';
-  filtered.forEach(r => {
-    const div = document.createElement('div');
-    div.style.padding = '4px 0';
-    div.textContent = `${r.Fecha? r.Fecha.toLocaleDateString('es-CL') : '-'} | ${r.Descripcion || ''} | ${r.Categoria || ''} | ${r.Quien || ''} | ${formatCurrency(r.Monto)}`;
-    modalContent.appendChild(div);
-  });
-  MicroModal.show('modal-1');
-};
+applyFilter.addEventListener('click', ()=>{ const y=parseInt(filterYear.value); const m=parseInt(filterMonth.value); currentFilter.year = isNaN(y)?null:y; currentFilter.month = isNaN(m)?null:m; renderAll(); });
+document.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', (e)=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); e.currentTarget.classList.add('active'); currentFilter.section = e.currentTarget.dataset.filter; renderAll(); }));
+openDetails.addEventListener('click', ()=>{ modalContent.innerHTML=''; filterTransactions().forEach(r=>{ const d=document.createElement('div'); d.style.padding='6px 0'; d.textContent = `${r.Fecha? r.Fecha.toLocaleDateString('es-CL') : '-'} | ${r.Descripcion||''} | ${r.Categoria||''} | ${r.Quien||''} | ${formatCurrency(r.Monto)}`; modalContent.appendChild(d); }); MicroModal.show('modal-1'); });
 
-// Init
-document.getElementById('csvUrlInput').value = SHEET_PUB_URL;
-fetchAndLoadTabletop();
+// init
+csvUrlInput.value = CSV_URL;
+if(localStorage.getItem('csv_url')){ CSV_URL = localStorage.getItem('csv_url'); csvUrlInput.value = CSV_URL; }
+fetchAndLoad(CSV_URL);
+
+// auto-refresh every 10 minutes
+setInterval(()=> fetchAndLoad(CSV_URL), 600000);
 
 </script>
 </body>
 </html>
-
